@@ -1,0 +1,116 @@
+buildscript {
+    ext {
+        springBootVersion = '1.3.2.RELEASE'
+    }
+    repositories {
+        jcenter()
+    }
+    dependencies {
+        classpath "org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}"
+    }
+}
+
+wrapper {
+    gradleVersion = '2.11'
+    // distributionUrl is processed because of IDEA completion stuff.
+    distributionUrl = distributionUrl.replaceAll(~/(?<=-)bin(?=\.zip$)/, 'all')
+}
+
+
+allprojects {
+    repositories.addAll rootProject.buildscript.repositories
+}
+
+subprojects {
+    apply plugin: 'java'
+
+    buildscript.repositories.addAll rootProject.buildscript.repositories
+}
+
+project(':fourth') {
+    dependencies {
+        compile 'com.google.guava:guava:19.0'
+    }
+}
+
+project(':third') {
+    dependencies {
+        compile 'com.google.jimfs:jimfs:1.1'
+        compile project(':fourth')
+    }
+}
+
+project(':custom') {
+    apply plugin: 'war'
+
+    ext['cas.version'] = '3.6.0'
+
+    configurations {
+        casWar
+    }
+
+    dependencies {
+        providedCompile group:'org.jasig.cas', name: 'cas-server-webapp', version: project['cas.version']
+        compile project(':third')
+    }
+
+    def casCopySpec = copySpec {
+        from configurations.providedCompile.resolvedConfiguration.firstLevelModuleDependencies.collect {
+            it.moduleArtifacts.findAll {
+                it.file.name.endsWith('.war')
+            }.collect {
+                zipTree(it.file)
+            }
+        }
+
+        // strip providedCompile
+        exclude 'WEB-INF/lib/servlet-api*'
+        // strip system
+        exclude 'WEB-INF/lib/stax-api*'
+
+        // strip logging
+        exclude 'WEB-INF/lib/commons-logging*'
+        exclude 'WEB-INF/lib/log4j*'
+        exclude 'WEB-INF/lib/slf4j-api*'
+        exclude 'WEB-INF/lib/slf4j-log4j12*'
+        exclude 'WEB-INF/lib/log4j-*-slf4j*'
+        exclude 'WEB-INF/lib/jcl-*-slf4j*'
+        exclude 'WEB-INF/lib/jul-*-slf4j*'
+        // strip duplicates
+        exclude 'WEB-INF/lib/javassist-3.7.ga.jar'
+        exclude 'WEB-INF/lib/joda-time-2.1.jar'
+        exclude 'WEB-INF/lib/commons-codec-1.4.jar'
+        exclude 'WEB-INF/lib/commons-io-2.0.jar'
+
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    }
+
+    war {
+        with casCopySpec
+    }
+
+    artifacts {
+        casWar tasks.war
+    }
+}
+
+project(':wrap') {
+    apply plugin: 'spring-boot'
+
+    ext['tomcat.version'] = '7.0.57'
+
+    dependencies {
+        compile 'org.springframework.boot:spring-boot-starter-actuator'
+        compile 'org.springframework.boot:spring-boot-starter-web', {
+            exclude module: 'spring-boot-starter-validation'
+            exclude module: 'spring-webmvc'
+            exclude module: 'tomcat-embed-websocket'
+        }
+        compile 'org.apache.tomcat.embed:tomcat-embed-jasper'
+
+        runtime project(path: ':custom', configuration: 'casWar'), {
+            transitive = false
+        }
+    }
+
+}

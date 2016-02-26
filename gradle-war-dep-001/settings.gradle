@@ -1,0 +1,6 @@
+include 'fourth'
+include 'third'
+include 'custom'
+include 'wrap'
+
+rootProject.name = 'gradle-war-dep-001'
