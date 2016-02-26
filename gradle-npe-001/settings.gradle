@@ -1,0 +1,4 @@
+include 'custom'
+include 'wrap'
+
+rootProject.name = 'gradle-npe-001'
